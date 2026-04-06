@@ -1,58 +1,168 @@
 import streamlit as st
-import yfinance as yf
-import plotly.graph_objects as go
+import streamlit.components.v1 as components
 
-# --- CONFIG ---
-st.set_page_config(page_title="Sovereign HUD", layout="centered")
+# --- PAGE CONFIG ---
+st.set_page_config(page_title="Sovereign Flow", layout="centered")
 
-# --- MINIMALIST DESIGN ---
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600&display=swap');
     .stApp { background-color: #000000; font-family: 'Inter', sans-serif; color: white; }
-    .price-text { font-size: 48px; font-weight: 600; text-align: center; margin: 0; }
-    .sub-text { font-size: 14px; color: #8e8e93; text-align: center; text-transform: uppercase; letter-spacing: 1px; }
-    .runway-box { background-color: #1c1c1e; border-radius: 15px; padding: 25px; margin: 20px 0; border: 1px solid #2c2c2e; }
     #MainMenu, footer, header {visibility: hidden;}
+    .game-container { border: 1px solid #1c1c1e; border-radius: 20px; overflow: hidden; }
     </style>
     """, unsafe_allow_html=True)
 
-# --- SIDEBAR INPUT ---
-st.sidebar.title("Settings")
-current_wealth = st.sidebar.number_input("Your Current Portfolio (€)", value=15000, step=1000)
-monthly_goal = 1500 # Your target rent/lifestyle
+st.markdown("<h2 style='text-align: center; font-weight: 600; letter-spacing: -1px;'>Sovereign Flow v1.0</h2>", unsafe_allow_html=True)
+st.markdown("<p style='text-align: center; color: #8e8e93; font-size: 14px;'>Goal: Reach 100% Sovereignty. Use Arrow Keys or Mouse.</p>", unsafe_allow_html=True)
 
-# --- DATA FETCHING ---
-@st.cache_data(ttl=600)
-def get_gold():
-    return yf.Ticker("GC=F").history(period="1y")
+# --- THE GAME ENGINE (HTML/JS) ---
+game_html = """
+<div id="game-wrapper" style="display: flex; justify-content: center; align-items: center; background: #000;">
+    <canvas id="gameCanvas" width="400" height="500" style="border-radius: 15px; cursor: none;"></canvas>
+</div>
 
-df = get_gold()
+<script>
+const canvas = document.getElementById('gameCanvas');
+const ctx = canvas.getContext('2d');
 
-# --- DASHBOARD ---
-st.markdown("<br><p class='sub-text'>Global Value Proxy</p>", unsafe_allow_html=True)
+let score = 0;
+let sovereignty = 0;
+let gameOver = false;
+let gameWon = false;
 
-if not df.empty:
-    curr = df['Close'].iloc[-1]
-    st.markdown(f"<p class='price-text'>${curr:,.2f}</p>", unsafe_allow_html=True)
-    st.markdown("<p class='sub-text'>Gold / Ounce</p>", unsafe_allow_html=True)
+const player = { x: 200, y: 430, size: 20, color: '#ffffff' };
+const items = [];
+const particles = [];
 
-    # --- THE RUNWAY CALCULATOR ---
-    # Math: (Portfolio * 4%) / 12 = Monthly Passive. 
-    # (Monthly Passive / Monthly Goal) * 30 = Days secured.
-    annual_passive = current_wealth * 0.04
-    monthly_passive = annual_passive / 12
-    days_secured = (monthly_passive / monthly_goal) * 30
+function createItem() {
+    const types = [
+        { name: 'gold', color: '#FFD700', value: 5, chance: 0.4 },      // Wealth
+        { name: 'skill', color: '#007AFF', value: 10, chance: 0.2 },    // Specialist Skills
+        { name: 'tax', color: '#FF3B30', value: -15, chance: 0.3 },    // High Taxes
+        { name: 'rain', color: '#48484A', value: -5, chance: 0.1 }     // Bad Weather
+    ];
     
-    st.markdown("<div class='runway-box'>", unsafe_allow_html=True)
-    st.write(f"### 🔓 Freedom Runway")
-    st.write(f"Your current portfolio secures **{days_secured:.1f} days** of your 1,500€ dream lifestyle every month.")
-    st.progress(min(days_secured / 30, 1.0))
-    st.write(f"Passive Income: **{monthly_passive:.2f}€ / {monthly_goal}€**")
-    st.markdown("</div>", unsafe_allow_html=True)
+    const random = Math.random();
+    let cumulative = 0;
+    for (let type of types) {
+        cumulative += type.chance;
+        if (random < cumulative) {
+            items.push({
+                x: Math.random() * (canvas.width - 20),
+                y: -20,
+                size: type.name === 'tax' ? 18 : 12,
+                speed: 3 + Math.random() * 3,
+                ...type
+            });
+            break;
+        }
+    }
+}
 
-    # --- MINIMALIST CHART ---
-    fig = go.Figure(go.Scatter(x=df.index, y=df['Close'], line=dict(color='#ffffff', width=2), fill='tozeroy', fillcolor='rgba(255,255,255,0.05)'))
-    fig.update_layout(paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)', margin=dict(l=0,r=0,t=0,b=0), height=250, 
-                      xaxis=dict(showgrid=False, color="#48484a"), yaxis=dict(showgrid=False, showticklabels=False))
-    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
+function update() {
+    if (gameOver || gameWon) return;
+
+    if (Math.random() < 0.05) createItem();
+
+    items.forEach((item, index) => {
+        item.y += item.speed;
+        
+        // Collision Detection
+        const dx = player.x - item.x;
+        const dy = player.y - item.y;
+        const distance = Math.sqrt(dx * dx + dy * dy);
+        
+        if (distance < player.size + item.size) {
+            sovereignty += item.value;
+            if (sovereignty < 0) sovereignty = 0;
+            if (sovereignty >= 100) gameWon = true;
+            items.splice(index, 1);
+        }
+    });
+
+    // Cleanup off-screen items
+    if (items.length > 50) items.shift();
+}
+
+function draw() {
+    ctx.fillStyle = '#000000';
+    ctx.fillRect(0, 0, canvas.width, canvas.height);
+
+    // Grid lines for "Engineer" look
+    ctx.strokeStyle = '#1c1c1e';
+    ctx.lineWidth = 1;
+    for(let i=0; i<canvas.width; i+=40) {
+        ctx.beginPath(); ctx.moveTo(i,0); ctx.lineTo(i,canvas.height); ctx.stroke();
+    }
+    for(let i=0; i<canvas.height; i+=40) {
+        ctx.beginPath(); ctx.moveTo(0,i); ctx.lineTo(canvas.width,i); ctx.stroke();
+    }
+
+    // Items
+    items.forEach(item => {
+        ctx.fillStyle = item.color;
+        if (item.name === 'tax') {
+            ctx.fillRect(item.x, item.y, item.size, item.size);
+        } else {
+            ctx.beginPath();
+            ctx.arc(item.x, item.y, item.size, 0, Math.PI * 2);
+            ctx.fill();
+        }
+    });
+
+    // Player
+    ctx.fillStyle = player.color;
+    ctx.shadowBlur = 15;
+    ctx.shadowColor = '#ffffff';
+    ctx.beginPath();
+    ctx.arc(player.x, player.y, player.size, 0, Math.PI * 2);
+    ctx.fill();
+    ctx.shadowBlur = 0;
+
+    // HUD
+    ctx.fillStyle = '#ffffff';
+    ctx.font = '600 16px Inter';
+    ctx.fillText(`SOVEREIGNTY: ${Math.max(0, sovereignty)}%`, 20, 40);
+    
+    // Progress Bar
+    ctx.fillStyle = '#1c1c1e';
+    ctx.roundRect(20, 50, 360, 6, 3);
+    ctx.fill();
+    ctx.fillStyle = '#32D74B';
+    ctx.roundRect(20, 50, (Math.min(sovereignty, 100) / 100) * 360, 6, 3);
+    ctx.fill();
+
+    if (gameWon) {
+        ctx.fillStyle = 'rgba(0,0,0,0.8)';
+        ctx.fillRect(0,0,canvas.width, canvas.height);
+        ctx.fillStyle = '#32D74B';
+        ctx.textAlign = 'center';
+        ctx.font = '600 24px Inter';
+        ctx.fillText('PASSPORT SECURED', canvas.width/2, canvas.height/2 - 20);
+        ctx.fillStyle = '#ffffff';
+        ctx.font = '400 16px Inter';
+        ctx.fillText('Destination: Warm Country', canvas.width/2, canvas.height/2 + 10);
+    }
+}
+
+canvas.addEventListener('mousemove', (e) => {
+    const rect = canvas.getBoundingClientRect();
+    player.x = e.clientX - rect.left;
+});
+
+function loop() {
+    update();
+    draw();
+    requestAnimationFrame(loop);
+}
+loop();
+</script>
+"""
+
+# Render the game
+components.html(game_html, height=550)
+
+st.markdown("---")
+st.write("### 🛠️ The Mechanics")
+st.write(f"This game simulates your journey as a Water Engineer. You need to earn **$1500€** in passive value to reach full autonomy.")
