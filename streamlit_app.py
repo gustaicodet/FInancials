@@ -18,7 +18,7 @@ st.markdown("""
     """, unsafe_allow_html=True)
 
 # --- ROBUST DATA FETCHING ---
-@st.cache_data(ttl=600) # Cache for 10 mins to be safe
+@st.cache_data(ttl=600)
 def get_gold_data():
     try:
         gold = yf.Ticker("GC=F")
@@ -26,7 +26,7 @@ def get_gold_data():
         if df.empty:
             return None
         return df
-except Exception:
+    except Exception:
         return None
 
 df = get_gold_data()
@@ -79,6 +79,5 @@ if df is not None:
     st.markdown(f"<p style='text-align: center; color: #48484a; font-size: 12px; margin-top: 40px;'>Data: Yahoo Finance | Updated {datetime.now().strftime('%H:%M')}</p>", unsafe_allow_html=True)
 
 else:
-    # If it still fails, show a more helpful error
     st.markdown("<br><br><h2 style='text-align: center; color: #ff453a;'>System Offline</h2>", unsafe_allow_html=True)
     st.info("The market data provider is currently unresponsive. This usually resolves in a few minutes.")
