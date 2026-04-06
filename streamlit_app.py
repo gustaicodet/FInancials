@@ -3,88 +3,121 @@ import yfinance as yf
 import plotly.graph_objects as go
 from datetime import datetime
 
-# --- APPLE DESIGN CONFIG ---
+# --- APPLE DESIGN SYSTEM CONFIG ---
 st.set_page_config(page_title="Gold Pro", layout="centered")
 
+# Advanced CSS for the "Apple" look
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
-    .stApp { background-color: #000000; font-family: 'Inter', -apple-system, sans-serif; }
-    h1 { font-weight: 600; letter-spacing: -1px; color: #ffffff; text-align: center; margin-bottom: 0; }
-    .price-text { font-size: 56px; font-weight: 600; color: #ffffff; margin: 0; text-align: center; }
-    .change-text { font-size: 24px; font-weight: 400; margin-top: -5px; text-align: center; margin-bottom: 20px; }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600&display=swap');
     
-    /* Minimalist Slider Styling */
-    .stSelectSlider { padding-bottom: 20px; }
-    div[data-baseweb="slider"] { background-color: transparent; }
-    
+    .stApp {
+        background-color: #000000;
+        font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    /* Remove Streamlit Clutter */
     #MainMenu, footer, header {visibility: hidden;}
+    .block-container {padding-top: 2rem; max-width: 500px;}
+
+    /* Center Header */
+    .title-text {
+        text-align: center;
+        font-weight: 500;
+        font-size: 18px;
+        color: #8e8e93;
+        margin-bottom: 5px;
+    }
+
+    /* Price Styling */
+    .price-large {
+        text-align: center;
+        font-size: 52px;
+        font-weight: 600;
+        color: #ffffff;
+        letter-spacing: -2px;
+        margin: 0;
+    }
+
+    .delta-text {
+        text-align: center;
+        font-size: 19px;
+        font-weight: 500;
+        margin-top: -5px;
+        margin-bottom: 30px;
+    }
+
+    /* Styling the Segmented Control (Pills) */
+    div[data-testid="stSegmentedControl"] {
+        display: flex;
+        justify-content: center;
+        background-color: #1c1c1e;
+        border-radius: 12px;
+        padding: 4px;
+        margin-bottom: 30px;
+    }
+    
+    button[data-testid="stSegmentedControlItem"] {
+        background-color: transparent !important;
+        border: none !important;
+        color: #ffffff !important;
+        font-size: 13px !important;
+        font-weight: 500 !important;
+    }
+
+    button[data-testid="stSegmentedControlItem"][aria-checked="true"] {
+        background-color: #3a3a3c !important;
+        border-radius: 8px !important;
+        box-shadow: 0 2px 5px rgba(0,0,0,0.2) !important;
+    }
     </style>
     """, unsafe_allow_html=True)
 
 # --- DATA FETCHING ---
 @st.cache_data(ttl=600)
-def get_gold_data(period):
+def fetch_gold(period):
     try:
-        gold = yf.Ticker("GC=F")
-        df = gold.history(period=period)
-        if df.empty:
-            return None
-        return df
-    except Exception:
+        data = yf.Ticker("GC=F").history(period=period)
+        return data if not data.empty else None
+    except:
         return None
 
 # --- UI LAYOUT ---
-st.markdown("<br><br>", unsafe_allow_html=True)
-st.markdown("<h1>Gold</h1>", unsafe_allow_html=True)
+st.markdown('<p class="title-text">Gold</p>', unsafe_allow_html=True)
 
-# 1. Timeframe Selection (The Spectrum Slider)
-# We use a select_slider to mimic the "1M, 6M, 1Y" buttons in Apple Stocks
-timeframe_map = {
-    "1 Month": "1mo",
-    "6 Months": "6mo",
-    "1 Year": "1y",
-    "5 Years": "5y",
-    "Maximum": "max"
-}
+# 1. Timeframe Selection (Segmented Control / Pills)
+timeframe_options = ["1M", "6M", "1Y", "5Y", "All"]
+timeframe_map = {"1M": "1mo", "6M": "6mo", "1Y": "1y", "5Y": "5y", "All": "max"}
 
-selected_label = st.select_slider(
-    label="Select Spectrum",
-    options=list(timeframe_map.keys()),
-    value="1 Year",
-    label_visibility="collapsed" # Keeps it minimalist
+# Using the modern segmented_control (available in 2026)
+selected_tf = st.segmented_control(
+    "Timeframe", 
+    options=timeframe_options, 
+    default="1Y", 
+    label_visibility="collapsed"
 )
 
-period = timeframe_map[selected_label]
-df = get_gold_data(period)
+df = fetch_gold(timeframe_map[selected_tf])
 
 if df is not None:
-    # Get prices for the display
-    current_price = float(df['Close'].iloc[-1])
-    prev_price = float(df['Close'].iloc[-2])
-    change = current_price - prev_price
-    pct_change = (change / prev_price) * 100
-    
-    color = "#32d74b" if change >= 0 else "#ff453a"
+    current = float(df['Close'].iloc[-1])
+    prev = float(df['Close'].iloc[-2])
+    diff = current - prev
+    pct = (diff / prev) * 100
+    color = "#32d74b" if diff >= 0 else "#ff453a"
 
-    # Price & Change Display
-    st.markdown(f"""
-        <div>
-            <p class="price-text">${current_price:,.2f}</p>
-            <p class="change-text" style="color: {color};">
-                {"↑" if change >= 0 else "↓"} {abs(change):,.2f} ({abs(pct_change):.2f}%)
-            </p>
-        </div>
-    """, unsafe_allow_html=True)
+    # 2. Display Price & Change
+    st.markdown(f'<p class="price-large">${current:,.2f}</p>', unsafe_allow_html=True)
+    st.markdown(f'<p class="delta-text" style="color: {color};">{"↑" if diff >= 0 else "↓"} {abs(diff):.2f} ({abs(pct):.2f}%)</p>', unsafe_allow_html=True)
 
-    # Minimalist Apple-Style Chart
+    # 3. The Apple-Style Chart
     fig = go.Figure()
     fig.add_trace(go.Scatter(
-        x=df.index, y=df['Close'], 
+        x=df.index, y=df['Close'],
         mode='lines',
-        line=dict(color='#ffffff', width=3),
+        line=dict(color='#ffffff', width=2.5, shape='spline'), # Spline = Smooth Curve
         fill='tozeroy',
-        fillcolor='rgba(255, 255, 255, 0.03)'
+        fillcolor='rgba(255, 255, 255, 0.04)'
     ))
 
     fig.update_layout(
@@ -92,15 +125,16 @@ if df is not None:
         paper_bgcolor='rgba(0,0,0,0)',
         plot_bgcolor='rgba(0,0,0,0)',
         margin=dict(l=0, r=0, t=0, b=0),
-        height=350,
-        xaxis=dict(showgrid=False, showticklabels=True, color="#8e8e93", nticks=5),
+        height=320,
+        xaxis=dict(showgrid=False, showticklabels=True, color="#48484a", nticks=4, font=dict(size=10)),
         yaxis=dict(showgrid=False, showticklabels=False, fixedrange=True),
-        hovermode="x unified"
+        hovermode="x unified",
+        hoverlabel=dict(bgcolor="#1c1c1e", font_size=12, font_family="Inter")
     )
 
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     
-    st.markdown(f"<p style='text-align: center; color: #48484a; font-size: 12px; margin-top: 20px;'>Data: Yahoo Finance | View: {selected_label}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align: center; color: #48484a; font-size: 11px; margin-top: 40px;'>Data: Yahoo Finance • {selected_tf} View</p>", unsafe_allow_html=True)
 
 else:
-    st.markdown("<br><br><h2 style='text-align: center; color: #ff453a;'>System Offline</h2>", unsafe_allow_html=True)
+    st.markdown("<h2 style='text-align: center; color: #ff453a; margin-top: 100px;'>Data Sync Error</h2>", unsafe_allow_html=True)
