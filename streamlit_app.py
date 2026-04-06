@@ -1,104 +1,114 @@
 import streamlit as st
 import yfinance as yf
-import pandas as pd
 import plotly.graph_objects as go
 from datetime import datetime
 
-# --- SYSTEM CONFIG ---
-st.set_page_config(page_title="FIN_TERMINAL_V2", layout="wide")
+# --- APPLE DESIGN CONFIG ---
+st.set_page_config(page_title="Gold Pro", layout="centered")
 
-# Extreme Minimalist CSS
+# Custom CSS for Apple Aesthetic (Clean, Rounded, Subtle Shadows)
 st.markdown("""
     <style>
-    @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&display=swap');
-    html, body, [class*="css"]  { font-family: 'IBM Plex Mono', monospace; background-color: #000000; color: #0dff00; }
-    .stMetric { border-bottom: 1px solid #333; padding: 15px 0px; border-radius: 0px; }
-    [data-testid="stHeader"] { background: rgba(0,0,0,0); }
+    @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
+    
+    /* Main Background */
+    .stApp {
+        background-color: #000000;
+        font-family: 'Inter', -apple-system, sans-serif;
+    }
+
+    /* Card Styling */
+    .metric-card {
+        background: #1c1c1e;
+        padding: 30px;
+        border-radius: 20px;
+        border: 1px solid #2c2c2e;
+        margin-bottom: 20px;
+    }
+
+    /* Clean Typography */
+    h1 {
+        font-weight: 600;
+        letter-spacing: -1px;
+        color: #ffffff;
+    }
+    
+    .price-text {
+        font-size: 48px;
+        font-weight: 600;
+        color: #ffffff;
+        margin: 0;
+    }
+
+    .change-text {
+        font-size: 20px;
+        font-weight: 400;
+        margin-top: -5px;
+    }
+
+    /* Hide Streamlit elements for a "Clean App" feel */
+    #MainMenu {visibility: hidden;}
+    footer {visibility: hidden;}
+    header {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- DATA ENGINE ---
-@st.cache_data(ttl=300) # Updates every 5 minutes
-def get_market_data():
-    tickers = {
-        "DAX": "^GDAXI", "DOW": "^DJI", "S&P500": "^GSPC",
-        "NIKKEI": "^N225", "HANG_SENG": "^HSI",
-        "GOLD": "GC=F", "SILVER": "SI=F", "COPPER": "HG=F", "BRENT": "BZ=F"
-    }
-    data = yf.download(list(tickers.values()), period="5d")['Close']
-    return data, tickers
+# --- DATA FETCHING ---
+@st.cache_data(ttl=300)
+def get_gold_data():
+    df = yf.download("GC=F", period="1y", interval="1d")
+    return df
 
-data, tickers = get_market_data()
+try:
+    df = get_gold_data()
+    current_price = df['Close'].iloc[-1]
+    prev_price = df['Close'].iloc[-2]
+    change = current_price - prev_price
+    pct_change = (change / prev_price) * 100
+    
+    color = "#32d74b" if change >= 0 else "#ff453a" # Apple Green / Apple Red
 
-# --- CALCULATIONS ---
-def get_change(ticker_key):
-    symbol = tickers[ticker_key]
-    current = data[symbol].iloc[-1]
-    prev = data[symbol].iloc[-2]
-    diff = current - prev
-    pct = (diff / prev) * 100
-    return current, pct
+    # --- UI LAYOUT ---
+    st.markdown("<br><br>", unsafe_allow_html=True)
+    
+    # Title
+    st.markdown("<h1 style='text-align: center;'>Gold</h1>", unsafe_allow_html=True)
 
-# --- HEADER ---
-st.title("📟 MARKET_PULSE_V2")
-st.caption(f"LAST_SYNC: {datetime.now().strftime('%H:%M:%S')} | STATUS: ONLINE")
-st.divider()
+    # Price Card
+    st.markdown(f"""
+        <div style="text-align: center; margin-bottom: 40px;">
+            <p class="price-text">${current_price:,.2f}</p>
+            <p class="change-text" style="color: {color};">
+                {"↑" if change >= 0 else "↓"} {abs(change):,.2f} ({abs(pct_change):.2f}%)
+            </p>
+        </div>
+    """, unsafe_allow_html=True)
 
-# --- ZONE 1: WESTERN INDICES ---
-st.subheader("🌐 WESTERN_MARKETS")
-col1, col2, col3 = st.columns(3)
-with col1:
-    val, pct = get_change("DAX")
-    st.metric("GER_DAX", f"{val:,.2f}", f"{pct:.2f}%")
-with col2:
-    val, pct = get_change("S&P500")
-    st.metric("US_S&P500", f"{val:,.2f}", f"{pct:.2f}%")
-with col3:
-    val, pct = get_change("DOW")
-    st.metric("US_DOW_JONES", f"{val:,.2f}", f"{pct:.2f}%")
+    # Chart
+    fig = go.Figure()
+    fig.add_trace(go.Scatter(
+        x=df.index, 
+        y=df['Close'], 
+        mode='lines',
+        line=dict(color='#ffffff', width=3),
+        fill='tozeroy',
+        fillcolor='rgba(255, 255, 255, 0.05)' # Subtle gradient-like fill
+    ))
 
-# --- ZONE 2: ASIAN INDICES ---
-st.subheader("🌏 ASIAN_MARKETS")
-col_a1, col_a2 = st.columns(2)
-with col_a1:
-    val, pct = get_change("NIKKEI")
-    st.metric("JPN_NIKKEI_225", f"{val:,.2f}", f"{pct:.2f}%")
-with col_a2:
-    val, pct = get_change("HANG_SENG")
-    st.metric("HK_HANG_SENG", f"{val:,.2f}", f"{pct:.2f}%")
+    fig.update_layout(
+        template="plotly_dark",
+        paper_bgcolor='rgba(0,0,0,0)',
+        plot_bgcolor='rgba(0,0,0,0)',
+        margin=dict(l=0, r=0, t=0, b=0),
+        height=300,
+        xaxis=dict(showgrid=False, showticklabels=True, color="#8e8e93"),
+        yaxis=dict(showgrid=False, showticklabels=False),
+        hovermode="x unified"
+    )
 
-st.divider()
+    st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
 
-# --- ZONE 3: COMMODITIES & RATIOS ---
-st.subheader("🧱 HARD_ASSETS")
-m1, m2, m3, m4 = st.columns(4)
+    st.markdown(f"<p style='text-align: center; color: #8e8e93; font-size: 12px; margin-top: 50px;'>Last updated: {datetime.now().strftime('%H:%M:%S')}</p>", unsafe_allow_html=True)
 
-gold_val, gold_pct = get_change("GOLD")
-silv_val, silv_pct = get_change("SILVER")
-gsr = gold_val / silv_val
-gsr_prev = data[tickers["GOLD"]].iloc[-2] / data[tickers["SILVER"]].iloc[-2]
-
-with m1:
-    st.metric("GOLD_OZ", f"${gold_val:,.2f}", f"{gold_pct:.2f}%")
-with m2:
-    st.metric("SILVER_OZ", f"${silv_val:,.2f}", f"{silv_pct:.2f}%")
-with m3:
-    st.metric("G/S_RATIO", f"{gsr:.2f}", f"{gsr - gsr_prev:.2f}")
-with m4:
-    oil_val, oil_pct = get_change("BRENT")
-    st.metric("BRENT_CRUDE", f"${oil_val:.2f}", f"{oil_pct:.2f}%")
-
-st.metric("COPPER_LB", f"${data[tickers['COPPER']].iloc[-1]:.2f}", 
-          f"{( (data[tickers['COPPER']].iloc[-1]/data[tickers['COPPER']].iloc[-2]) - 1)*100:.2f}%")
-
-# --- VISUAL SIGNAL (GSR CHART) ---
-st.subheader("📉 RATIO_TRACKER")
-gsr_series = data[tickers["GOLD"]] / data[tickers["SILVER"]]
-fig = go.Figure()
-fig.add_trace(go.Scatter(x=gsr_series.index, y=gsr_series, line=dict(color='#0dff00', width=2)))
-fig.update_layout(
-    template="plotly_dark", height=250, margin=dict(l=0,r=0,t=0,b=0),
-    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
-    yaxis=dict(showgrid=False), xaxis=dict(showgrid=False)
-)
-st.plotly_chart(fig, use_container_width=True)
+except Exception as e:
+    st.error("Market data currently unavailable.")
