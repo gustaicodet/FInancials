@@ -15,7 +15,7 @@ st.markdown("""
     html, body, [class*="css"]  { font-family: 'IBM Plex Mono', monospace; background-color: #000000; color: #0dff00; }
     .stMetric { border: 1px solid #333; padding: 10px; border-radius: 0px; background-color: #0a0a0a; }
     </style>
-    """, unsafe_allow_value=True)
+    """, unsafe_allow_html=True)
 
 # --- DATA FETCHING ---
 @st.cache_data(ttl=3600)
