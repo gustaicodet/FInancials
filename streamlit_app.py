@@ -10,29 +10,56 @@ st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;600&display=swap');
     .stApp { background-color: #000000; font-family: 'Inter', -apple-system, sans-serif; }
-    h1 { font-weight: 600; letter-spacing: -1px; color: #ffffff; text-align: center; }
+    h1 { font-weight: 600; letter-spacing: -1px; color: #ffffff; text-align: center; margin-bottom: 0; }
     .price-text { font-size: 56px; font-weight: 600; color: #ffffff; margin: 0; text-align: center; }
-    .change-text { font-size: 24px; font-weight: 400; margin-top: -5px; text-align: center; }
+    .change-text { font-size: 24px; font-weight: 400; margin-top: -5px; text-align: center; margin-bottom: 20px; }
+    
+    /* Minimalist Slider Styling */
+    .stSelectSlider { padding-bottom: 20px; }
+    div[data-baseweb="slider"] { background-color: transparent; }
+    
     #MainMenu, footer, header {visibility: hidden;}
     </style>
     """, unsafe_allow_html=True)
 
-# --- ROBUST DATA FETCHING ---
+# --- DATA FETCHING ---
 @st.cache_data(ttl=600)
-def get_gold_data():
+def get_gold_data(period):
     try:
         gold = yf.Ticker("GC=F")
-        df = gold.history(period="1y")
+        df = gold.history(period=period)
         if df.empty:
             return None
         return df
     except Exception:
         return None
 
-df = get_gold_data()
+# --- UI LAYOUT ---
+st.markdown("<br><br>", unsafe_allow_html=True)
+st.markdown("<h1>Gold</h1>", unsafe_allow_html=True)
+
+# 1. Timeframe Selection (The Spectrum Slider)
+# We use a select_slider to mimic the "1M, 6M, 1Y" buttons in Apple Stocks
+timeframe_map = {
+    "1 Month": "1mo",
+    "6 Months": "6mo",
+    "1 Year": "1y",
+    "5 Years": "5y",
+    "Maximum": "max"
+}
+
+selected_label = st.select_slider(
+    label="Select Spectrum",
+    options=list(timeframe_map.keys()),
+    value="1 Year",
+    label_visibility="collapsed" # Keeps it minimalist
+)
+
+period = timeframe_map[selected_label]
+df = get_gold_data(period)
 
 if df is not None:
-    # Get the most recent valid prices
+    # Get prices for the display
     current_price = float(df['Close'].iloc[-1])
     prev_price = float(df['Close'].iloc[-2])
     change = current_price - prev_price
@@ -40,12 +67,9 @@ if df is not None:
     
     color = "#32d74b" if change >= 0 else "#ff453a"
 
-    st.markdown("<br><br>", unsafe_allow_html=True)
-    st.markdown("<h1>Gold</h1>", unsafe_allow_html=True)
-
     # Price & Change Display
     st.markdown(f"""
-        <div style="margin-bottom: 40px;">
+        <div>
             <p class="price-text">${current_price:,.2f}</p>
             <p class="change-text" style="color: {color};">
                 {"↑" if change >= 0 else "↓"} {abs(change):,.2f} ({abs(pct_change):.2f}%)
@@ -76,8 +100,7 @@ if df is not None:
 
     st.plotly_chart(fig, use_container_width=True, config={'displayModeBar': False})
     
-    st.markdown(f"<p style='text-align: center; color: #48484a; font-size: 12px; margin-top: 40px;'>Data: Yahoo Finance | Updated {datetime.now().strftime('%H:%M')}</p>", unsafe_allow_html=True)
+    st.markdown(f"<p style='text-align: center; color: #48484a; font-size: 12px; margin-top: 20px;'>Data: Yahoo Finance | View: {selected_label}</p>", unsafe_allow_html=True)
 
 else:
     st.markdown("<br><br><h2 style='text-align: center; color: #ff453a;'>System Offline</h2>", unsafe_allow_html=True)
-    st.info("The market data provider is currently unresponsive. This usually resolves in a few minutes.")
