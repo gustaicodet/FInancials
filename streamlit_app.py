@@ -2,86 +2,103 @@ import streamlit as st
 import yfinance as yf
 import pandas as pd
 import plotly.graph_objects as go
-import feedparser
-import requests
 from datetime import datetime
 
-# --- CONFIG & THEME ---
-st.set_page_config(page_title="ENGINEER_TERMINAL_V1", layout="wide")
+# --- SYSTEM CONFIG ---
+st.set_page_config(page_title="FIN_TERMINAL_V2", layout="wide")
 
+# Extreme Minimalist CSS
 st.markdown("""
     <style>
     @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@300;400;600&display=swap');
     html, body, [class*="css"]  { font-family: 'IBM Plex Mono', monospace; background-color: #000000; color: #0dff00; }
-    .stMetric { border: 1px solid #333; padding: 10px; border-radius: 0px; background-color: #0a0a0a; }
+    .stMetric { border-bottom: 1px solid #333; padding: 15px 0px; border-radius: 0px; }
+    [data-testid="stHeader"] { background: rgba(0,0,0,0); }
     </style>
     """, unsafe_allow_html=True)
 
-# --- DATA FETCHING ---
-@st.cache_data(ttl=3600)
-def get_fin_data():
-    tickers = {"Gold": "GC=F", "Silver": "SI=F", "Copper": "HG=F", "Oil": "BZ=F"}
-    data = yf.download(list(tickers.values()), period="1mo")['Close']
-    data.columns = tickers.keys()
-    return data
+# --- DATA ENGINE ---
+@st.cache_data(ttl=300) # Updates every 5 minutes
+def get_market_data():
+    tickers = {
+        "DAX": "^GDAXI", "DOW": "^DJI", "S&P500": "^GSPC",
+        "NIKKEI": "^N225", "HANG_SENG": "^HSI",
+        "GOLD": "GC=F", "SILVER": "SI=F", "COPPER": "HG=F", "BRENT": "BZ=F"
+    }
+    data = yf.download(list(tickers.values()), period="5d")['Close']
+    return data, tickers
 
-@st.cache_data(ttl=1800)
-def get_kiel_tide():
-    # Kiel Coordinates: 54.32, 10.13
-    url = "https://marine-api.open-meteo.com/v1/marine?latitude=54.32&longitude=10.13&current=wave_height"
-    try:
-        r = requests.get(url).json()
-        return f"{r['current']['wave_height']}m"
-    except: return "N/A"
+data, tickers = get_market_data()
 
-# --- SIDEBAR (INPUTS) ---
-st.sidebar.title("🕹️ COMMAND_CENTER")
-portfolio_val = st.sidebar.number_input("Current Portfolio (€)", value=10000, step=1000)
-rent_goal = 1500
-target_fire = (rent_goal * 12) / 0.04  # 4% Rule
+# --- CALCULATIONS ---
+def get_change(ticker_key):
+    symbol = tickers[ticker_key]
+    current = data[symbol].iloc[-1]
+    prev = data[symbol].iloc[-2]
+    diff = current - prev
+    pct = (diff / prev) * 100
+    return current, pct
 
-# --- MAIN DASHBOARD ---
-st.title("⚡ SOVEREIGN_ENGINEER_TERMINAL")
-st.write(f"SYSTEM_TIME: {datetime.now().strftime('%Y-%m-%d %H:%M:%S')} | LOCATION: KIEL_GER")
+# --- HEADER ---
+st.title("📟 MARKET_PULSE_V2")
+st.caption(f"LAST_SYNC: {datetime.now().strftime('%H:%M:%S')} | STATUS: ONLINE")
+st.divider()
 
+# --- ZONE 1: WESTERN INDICES ---
+st.subheader("🌐 WESTERN_MARKETS")
 col1, col2, col3 = st.columns(3)
-
-# Row 1: Financial Metrics
-data = get_fin_data()
-gsr = data['Gold'].iloc[-1] / data['Silver'].iloc[-1]
-gsr_prev = data['Gold'].iloc[-2] / data['Silver'].iloc[-2]
-
 with col1:
-    st.metric("GOLD/SILVER_RATIO", f"{gsr:.2f}", f"{gsr-gsr_prev:.2f}")
+    val, pct = get_change("DAX")
+    st.metric("GER_DAX", f"{val:,.2f}", f"{pct:.2f}%")
 with col2:
-    st.metric("COPPER_HG", f"{data['Copper'].iloc[-1]:.2f}", f"{(data['Copper'].iloc[-1]/data['Copper'].iloc[-2]-1)*100:.2f}%")
+    val, pct = get_change("S&P500")
+    st.metric("US_S&P500", f"{val:,.2f}", f"{pct:.2f}%")
 with col3:
-    st.metric("KIEL_WAVE_HEIGHT", get_kiel_tide())
+    val, pct = get_change("DOW")
+    st.metric("US_DOW_JONES", f"{val:,.2f}", f"{pct:.2f}%")
+
+# --- ZONE 2: ASIAN INDICES ---
+st.subheader("🌏 ASIAN_MARKETS")
+col_a1, col_a2 = st.columns(2)
+with col_a1:
+    val, pct = get_change("NIKKEI")
+    st.metric("JPN_NIKKEI_225", f"{val:,.2f}", f"{pct:.2f}%")
+with col_a2:
+    val, pct = get_change("HANG_SENG")
+    st.metric("HK_HANG_SENG", f"{val:,.2f}", f"{pct:.2f}%")
 
 st.divider()
 
-# Row 2: Charts & Freedom Tracker
-c_left, c_right = st.columns([2, 1])
+# --- ZONE 3: COMMODITIES & RATIOS ---
+st.subheader("🧱 HARD_ASSETS")
+m1, m2, m3, m4 = st.columns(4)
 
-with c_left:
-    st.subheader("📊 COMMODITY_DYNAMICS")
-    fig = go.Figure()
-    fig.add_trace(go.Scatter(x=data.index, y=data['Gold']/data['Silver'], name="GSR", line=dict(color='#0dff00')))
-    fig.update_layout(template="plotly_dark", height=300, margin=dict(l=0,r=0,t=0,b=0), paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)')
-    st.plotly_chart(fig, use_container_width=True)
+gold_val, gold_pct = get_change("GOLD")
+silv_val, silv_pct = get_change("SILVER")
+gsr = gold_val / silv_val
+gsr_prev = data[tickers["GOLD"]].iloc[-2] / data[tickers["SILVER"]].iloc[-2]
 
-with c_right:
-    st.subheader("🔓 FREEDOM_TRACKER")
-    progress = min(portfolio_val / target_fire, 1.0)
-    st.progress(progress)
-    st.write(f"Goal: {target_fire:,.0f}€ (at 4% SWR)")
-    st.write(f"Monthly Passive Est: {(portfolio_val * 0.04 / 12):.2f}€ / {rent_goal}€")
+with m1:
+    st.metric("GOLD_OZ", f"${gold_val:,.2f}", f"{gold_pct:.2f}%")
+with m2:
+    st.metric("SILVER_OZ", f"${silv_val:,.2f}", f"{silv_pct:.2f}%")
+with m3:
+    st.metric("G/S_RATIO", f"{gsr:.2f}", f"{gsr - gsr_prev:.2f}")
+with m4:
+    oil_val, oil_pct = get_change("BRENT")
+    st.metric("BRENT_CRUDE", f"${oil_val:.2f}", f"{oil_pct:.2f}%")
 
-st.divider()
+st.metric("COPPER_LB", f"${data[tickers['COPPER']].iloc[-1]:.2f}", 
+          f"{( (data[tickers['COPPER']].iloc[-1]/data[tickers['COPPER']].iloc[-2]) - 1)*100:.2f}%")
 
-# Row 3: Engineering News
-st.subheader("📰 INFRASTRUCTURE_WIRE")
-feed = feedparser.parse("https://www.energy-storage.news/feed/")
-for entry in feed.entries[:4]:
-    st.markdown(f"**[{entry.title}]({entry.link})**")
-    st.caption(f"Source: Energy Storage News | {entry.published[:16]}")
+# --- VISUAL SIGNAL (GSR CHART) ---
+st.subheader("📉 RATIO_TRACKER")
+gsr_series = data[tickers["GOLD"]] / data[tickers["SILVER"]]
+fig = go.Figure()
+fig.add_trace(go.Scatter(x=gsr_series.index, y=gsr_series, line=dict(color='#0dff00', width=2)))
+fig.update_layout(
+    template="plotly_dark", height=250, margin=dict(l=0,r=0,t=0,b=0),
+    paper_bgcolor='rgba(0,0,0,0)', plot_bgcolor='rgba(0,0,0,0)',
+    yaxis=dict(showgrid=False), xaxis=dict(showgrid=False)
+)
+st.plotly_chart(fig, use_container_width=True)
